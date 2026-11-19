@@ -12,7 +12,10 @@
     "Descripción: resumen breve escrito como sustantivo, estilo parte de trabajo, sin el código del equipo ni la urgencia (p. ej. «pierde agua por el cierre mecánico» → «Pérdida de agua por el cierre mecánico»).",
     "Prioridad: «Alta» si es urgente, crítico o el equipo está parado; «Baja» si no corre prisa; si no se indica, no precargues nada (por defecto Normal).",
     "Puedes adaptar la etiqueta y añadir una ayuda corta a cada campo, en español.",
-    "El usuario revisa y pulsa «Crear orden»: no digas que la orden está creada."
+    "El usuario revisa y pulsa «Crear orden»: no digas que la orden está creada.",
+    "Hora en que se detectó: en formato HH:MM de 24 h (p. ej. «a las 2 de la mañana» → 02:00; «a las 3 y media de la tarde» → 15:30).",
+    "Si el usuario da información útil que no encaja en ningún campo, añádela en «observaciones» en vez de perderla.",
+    "Si en un mensaje posterior el usuario añade o corrige datos, vuelve a abrir el formulario con TODO lo dicho hasta ahora (datos anteriores + nuevos)."
   ],
   "campos": [
     {
@@ -36,7 +39,11 @@
       "etiqueta": "Prioridad",
       "tipo": "selector",
       "obligatorio": false,
-      "opciones": ["Baja", "Normal", "Alta"],
+      "opciones": [
+        "Baja",
+        "Normal",
+        "Alta"
+      ],
       "por_defecto": "Normal",
       "columna": "prioridad"
     },
@@ -55,11 +62,21 @@
       "obligatorio": false
     },
     {
+      "nombre": "hora_deteccion",
+      "etiqueta": "Hora en que se detectó",
+      "tipo": "hora",
+      "obligatorio": false
+    },
+    {
       "nombre": "turno",
       "etiqueta": "Turno en que se detectó",
       "tipo": "selector",
       "obligatorio": false,
-      "opciones": ["Mañana", "Tarde", "Noche"]
+      "opciones": [
+        "Mañana",
+        "Tarde",
+        "Noche"
+      ]
     },
     {
       "nombre": "contacto",

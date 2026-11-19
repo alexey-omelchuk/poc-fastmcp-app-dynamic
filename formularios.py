@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,11 +21,18 @@ from catalogo import ACTIVOS, normalizar_activo
 DIR_FORMULARIOS = Path(os.environ.get("FORMULARIOS_DIR", Path(__file__).parent / "formularios"))
 
 # Tipos de campo que sabe pintar el renderizador genérico (lista cerrada).
-TIPOS_PERMITIDOS = {"texto", "texto_largo", "selector", "si_no", "numero", "fecha"}
+TIPOS_PERMITIDOS = {"texto", "texto_largo", "selector", "si_no", "numero", "fecha", "hora"}
 MAX_ETIQUETA = 80
 MAX_AYUDA = 160
 MAX_TEXTO_POR_DEFECTO = 1000
 SI_NO = {"si": "Sí", "no": "No"}
+_HORA = re.compile(r"^([01]?\d|2[0-3])[:.h]([0-5]\d)$")
+
+
+def _normalizar_hora(texto: str) -> str | None:
+    """'2:00', '02.00', '14h30' → 'HH:MM'. Devuelve None si no es una hora."""
+    m = _HORA.match(texto.strip().lower().replace(" ", ""))
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else None
 
 # Orígenes de opciones dinámicas que puede usar una definición ("opciones_desde").
 ORIGENES_OPCIONES = {
@@ -103,6 +111,9 @@ def _limpiar_valor(campo: dict, valor) -> tuple[str, str | None]:
         if texto.lower() in validos:
             return validos[texto.lower()], None
         return "", f"«{texto}» no es una opción válida de {campo['nombre']}: se deja vacío."
+    if campo["tipo"] == "hora":
+        hora = _normalizar_hora(texto)
+        return (hora, None) if hora else ("", f"«{texto}» no es una hora válida (HH:MM): se deja vacío.")
     limite = campo.get("max_longitud", MAX_TEXTO_POR_DEFECTO)
     if len(texto) > limite:
         return texto[:limite], f"{campo['nombre']}: texto recortado a {limite} caracteres."
@@ -180,6 +191,12 @@ def validar_valores(tipo: str, valores: dict) -> tuple[dict, list[str]]:
             if texto not in validos:
                 errores.append(f"{campo['etiqueta']}: «{texto}» no es válido ({', '.join(validos)}).")
                 continue
+        elif campo["tipo"] == "hora":
+            hora = _normalizar_hora(texto)
+            if not hora:
+                errores.append(f"{campo['etiqueta']}: debe ser una hora (HH:MM).")
+                continue
+            texto = hora
         elif campo["tipo"] == "numero":
             try:
                 float(texto.replace(",", "."))

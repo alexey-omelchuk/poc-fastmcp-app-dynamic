@@ -44,6 +44,14 @@
 
 ## Limitaciones y lo que queda por ver
 
+- **El LLM no crea campos nuevos sobre la marcha**, por diseño: solo elige entre los de la definición. Ejemplo
+  real: «esto ocurrió a las 2 de la mañana» no tenía dónde ir hasta que se añadió `hora_deteccion` al JSON.
+  Mientras no exista el campo, la información va a **Observaciones** (está en las instrucciones). Dejar que el
+  LLM creara campos libres rompería la fiabilidad de lo que se guarda; sería el enfoque B o un modo
+  «campos libres» que acabaría en `datos_extra` sin validación.
+- **Mensajes posteriores**: si el usuario añade datos en otro mensaje, el agente vuelve a abrir el formulario con
+  todo lo dicho (nueva solicitud). El formulario anterior se queda en el chat sin guardar.
+
 - **Variabilidad**: el mismo mensaje puede producir etiquetas u orden distintos según el LLM. Si se quiere
   presentación idéntica, basta con que la definición marque etiquetas fijas y que el servidor ignore las del LLM.
 - **Coste y latencia**: hacen falta dos llamadas al LLM (describir → abrir) en vez de una.

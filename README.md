@@ -63,13 +63,19 @@ Usuario → Chainlit + Groq ─► describir_formulario("alta_ot")   ← lee for
 | `chat/` | Chainlit + Groq, igual que la v1, pero con flujo de dos pasos (describir → abrir). Botones de inicio en `chat/starters.json` |
 | `tests/test_dinamico.py` | 9 pruebas: diseño, mínimo, obligatorios forzados, campos inventados, validación, extras, idempotencia y campo nuevo sin código |
 
+### ¿Por qué el agente no se inventa campos?
+El agente **solo puede usar los campos que existen en la definición**. Si el usuario da un dato que no encaja en
+ningún campo, el agente lo pone en **Observaciones** (está en las instrucciones). Es a propósito: así lo que se guarda
+es siempre fiable. Si un dato se repite a menudo, lo correcto es **añadir ese campo al JSON**. Por ejemplo, la
+«Hora en que se detectó» se añadió así.
+
 ### Añadir un campo sin escribir código
 1. Edita `formularios/alta_ot.json` y añade, por ejemplo:
    `{"nombre": "horas_estimadas", "etiqueta": "Horas estimadas", "tipo": "numero", "obligatorio": false}`
 2. `docker compose restart mcp`
 3. El agente ya lo conoce y lo puede usar. Se guarda en `datos_extra`.
 
-Tipos disponibles: `texto`, `texto_largo`, `selector`, `si_no`, `numero` y `fecha`.
+Tipos disponibles: `texto`, `texto_largo`, `selector`, `si_no`, `numero`, `fecha` y `hora`.
 
 ### Experimento opcional: el LLM escribe el **código** del formulario
 FastMCP trae `GenerativeUI`: el LLM escribe código Python de Prefab que se ejecuta en un sandbox (Pyodide).

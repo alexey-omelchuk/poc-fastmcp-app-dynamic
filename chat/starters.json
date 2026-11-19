@@ -4,23 +4,23 @@
     "message": "Crea una orden para la bomba P-101. Pierde agua por el cierre mecánico y es urgente"
   },
   {
-    "label": "2 · Solo equipo y avería",
-    "message": "Ábreme una orden con solo dos campos, el equipo y la avería: el compresor C-201 hace un ruido raro"
+    "label": "2 · Poca información",
+    "message": "El compresor C-201 hace un ruido raro"
   },
   {
-    "label": "3 · Con turno, equipo parado y contacto",
-    "message": "El motor M-301 se ha parado y hace un ruido metálico al arrancar. Lo detectó el turno de noche y la persona de contacto es Juan Pérez"
+    "label": "3 · Mucha información",
+    "message": "El motor M-301 se ha parado de golpe y hace un ruido metálico al arrancar. Lo han visto los del turno de noche; si necesitáis algo, preguntad a Juan Pérez"
   },
   {
-    "label": "4 · Baja prioridad con observaciones",
-    "message": "La válvula V-401 no cierra bien, no es urgente. Pon en observaciones que la junta se cambió el mes pasado"
+    "label": "4 · Sin prisa y con un detalle",
+    "message": "La válvula V-401 no termina de cerrar, pero no corre prisa. Ojo, que la junta ya se cambió el mes pasado"
   },
   {
-    "label": "5 · Prueba de seguridad: quitar un obligatorio",
-    "message": "Prueba de seguridad: abre la orden de una fuga de aceite sin el campo obligatorio Activo, para comprobar si el servidor lo vuelve a poner"
+    "label": "5 · Sin saber el equipo",
+    "message": "Hay una fuga de aceite en la zona de bombas. Ábreme la orden, que no sé qué equipo es"
   },
   {
-    "label": "6 · Ver órdenes guardadas",
-    "message": "¿Qué órdenes hay guardadas?"
+    "label": "6 · Órdenes guardadas",
+    "message": "¿Qué órdenes tenemos registradas?"
   }
 ]

@@ -106,6 +106,8 @@ def _pintar_campo(c: dict) -> None:
             Input(name=c["nombre"], input_type="number")
         elif c["tipo"] == "fecha":
             Input(name=c["nombre"], input_type="date")
+        elif c["tipo"] == "hora":
+            Input(name=c["nombre"], input_type="time")
         else:
             Input(name=c["nombre"])
 

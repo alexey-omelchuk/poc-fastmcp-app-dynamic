@@ -131,3 +131,20 @@ async def test_campo_nuevo_sin_tocar_codigo(server, tmp_path):
         r = (await c.call_tool("guardar_ot", {"solicitud_id": _sol(txt), "valores": {"activo": "C-201", "descripcion": "x", "horas_estimadas": "2"}})).data
     import db
     assert r["creada_ahora"] and json.loads(db.listar_ordenes()[0]["datos_extra"]) == {"horas_estimadas": "2"}
+
+
+async def test_campo_hora(server):
+    import db
+    async with Client(server.mcp) as c:
+        desc = (await c.call_tool("describir_formulario", {})).data
+        assert "hora_deteccion" in [x["nombre"] for x in desc["campos"]]
+        _, st, txt = await _abrir(c, [{"nombre": "activo", "valor": "M-301"}, {"nombre": "descripcion", "valor": "Ruido"},
+                                      {"nombre": "hora_deteccion", "valor": "2:00"}])
+        assert st["hora_deteccion"] == "02:00"
+        _, st2, txt2 = await _abrir(c, [{"nombre": "activo", "valor": "M-301"}, {"nombre": "descripcion", "valor": "x"},
+                                        {"nombre": "hora_deteccion", "valor": "las dos"}])
+        assert st2["hora_deteccion"] == "" and "no es una hora" in txt2
+        with pytest.raises(ToolError):
+            await c.call_tool("guardar_ot", {"solicitud_id": "H1", "valores": {"activo": "M-301", "descripcion": "x", "hora_deteccion": "25:99"}})
+        r = (await c.call_tool("guardar_ot", {"solicitud_id": _sol(txt), "valores": {"activo": "M-301", "descripcion": "Ruido", "hora_deteccion": "02:00"}})).data
+    assert r["creada_ahora"] and json.loads(db.listar_ordenes()[0]["datos_extra"]) == {"hora_deteccion": "02:00"}
