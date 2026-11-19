@@ -1,31 +1,39 @@
-# Arranque:  docker compose up -d                     → chat Chainlit en http://localhost:8001 (+ servidor MCP en :8000)
-# Visor:     docker compose --profile visor up -d     → además, visor de FastMCP (fastmcp dev apps) en http://localhost:8080
+# Exploración: formulario de OT generado dinámicamente por el LLM.
+# Usa puertos distintos de la v1 para poder tener los dos proyectos a la vez.
+#
+# Arranque:  docker compose up -d                     → chat Chainlit en http://localhost:8011 (+ MCP en :8010)
+# Visor:     docker compose --profile visor up -d     → además, visor de FastMCP (URL con token en `docker compose logs visor`)
 # Parar:     docker compose --profile visor down
+# Experimento «el LLM escribe código»: crea un .env con GENERATIVE_UI=1 y vuelve a hacer up -d
+
+name: vekai-ot-dynamic
 
 services:
   mcp:
     build: .
-    image: vekai-ot-mcp:latest
+    image: vekai-ot-dynamic-mcp:latest
     pull_policy: build
-    container_name: vekai-ot-mcp
+    container_name: vekai-dyn-mcp
     ports:
-      - "8000:8000"
+      - "8010:8000"
+    environment:
+      GENERATIVE_UI: ${GENERATIVE_UI:-0}
     volumes:
-      - ./data:/app/data            # SQLite en ./data/ordenes.db
+      - ./data:/app/data                      # SQLite
+      - ./formularios:/app/formularios:ro     # definiciones de formularios: edítalas y `docker compose restart mcp`
     restart: unless-stopped
 
   chat:
     build: ./chat
-    image: vekai-ot-chat:latest
+    image: vekai-ot-dynamic-chat:latest
     pull_policy: build
-    container_name: vekai-ot-chat
+    container_name: vekai-dyn-chat
     ports:
-      - "8001:8001"
+      - "8011:8001"
     environment:
       MCP_URL: http://mcp:8000/mcp
     env_file:
-      # API key de Groq (GROQ_API_KEY=...) fuera del repo, en la carpeta padre.
-      - path: ../var_entorno_groq.txt
+      - path: ../var_entorno_groq.txt         # GROQ_API_KEY=... (fuera del repo)
         required: false
       - path: .env
         required: false
@@ -34,12 +42,15 @@ services:
     restart: unless-stopped
 
   visor:
-    image: vekai-ot-mcp:latest
-    container_name: vekai-ot-visor
+    image: vekai-ot-dynamic-mcp:latest
+    container_name: vekai-dyn-visor
     profiles: ["visor"]
     depends_on: [mcp]
-    command: ["fastmcp", "dev", "apps", "server.py:mcp", "--host", "0.0.0.0", "--no-reload"]
+    environment:
+      GENERATIVE_UI: ${GENERATIVE_UI:-0}
+    command: ["fastmcp", "dev", "apps", "server.py:mcp", "--host", "0.0.0.0", "--dev-port", "8090", "--no-reload"]
     ports:
-      - "8080:8080"
+      - "8090:8090"
     volumes:
       - ./data:/app/data
+      - ./formularios:/app/formularios:ro

@@ -1,0 +1,72 @@
+{
+  "id": "alta_ot",
+  "titulo": "Nueva orden de trabajo",
+  "descripcion": "Alta de una orden de trabajo (OT) de mantenimiento a partir de una avería.",
+  "herramienta_guardar": "guardar_ot",
+  "instrucciones": [
+    "Construye el formulario a partir de lo que ha dicho el usuario.",
+    "Incluye SIEMPRE los campos obligatorios (el servidor los añadirá igualmente si faltan).",
+    "Incluye los campos opcionales solo si el usuario ha dado ese dato o si son útiles para esta avería. Si el usuario pide un formulario mínimo, incluye solo los obligatorios y lo que pida.",
+    "Precarga en 'valor' lo que el usuario haya dicho. No inventes datos.",
+    "Activo: usa el código del equipo si se menciona (P-101, C-201, M-301, V-401); si no, déjalo sin valor.",
+    "Descripción: resumen breve escrito como sustantivo, estilo parte de trabajo, sin el código del equipo ni la urgencia (p. ej. «pierde agua por el cierre mecánico» → «Pérdida de agua por el cierre mecánico»).",
+    "Prioridad: «Alta» si es urgente, crítico o el equipo está parado; «Baja» si no corre prisa; si no se indica, no precargues nada (por defecto Normal).",
+    "Puedes adaptar la etiqueta y añadir una ayuda corta a cada campo, en español.",
+    "El usuario revisa y pulsa «Crear orden»: no digas que la orden está creada."
+  ],
+  "campos": [
+    {
+      "nombre": "activo",
+      "etiqueta": "Activo",
+      "tipo": "selector",
+      "obligatorio": true,
+      "opciones_desde": "catalogo_activos",
+      "columna": "activo"
+    },
+    {
+      "nombre": "descripcion",
+      "etiqueta": "Descripción de la avería",
+      "tipo": "texto_largo",
+      "obligatorio": true,
+      "max_longitud": 500,
+      "columna": "descripcion"
+    },
+    {
+      "nombre": "prioridad",
+      "etiqueta": "Prioridad",
+      "tipo": "selector",
+      "obligatorio": false,
+      "opciones": ["Baja", "Normal", "Alta"],
+      "por_defecto": "Normal",
+      "columna": "prioridad"
+    },
+    {
+      "nombre": "observaciones",
+      "etiqueta": "Observaciones",
+      "tipo": "texto_largo",
+      "obligatorio": false,
+      "max_longitud": 1000,
+      "columna": "observaciones"
+    },
+    {
+      "nombre": "equipo_parado",
+      "etiqueta": "¿El equipo está parado?",
+      "tipo": "si_no",
+      "obligatorio": false
+    },
+    {
+      "nombre": "turno",
+      "etiqueta": "Turno en que se detectó",
+      "tipo": "selector",
+      "obligatorio": false,
+      "opciones": ["Mañana", "Tarde", "Noche"]
+    },
+    {
+      "nombre": "contacto",
+      "etiqueta": "Persona de contacto",
+      "tipo": "texto",
+      "obligatorio": false,
+      "max_longitud": 80
+    }
+  ]
+}

@@ -1,11 +1,11 @@
-"""Chat de demo en Chainlit con un agente real (LLM de Groq) que usa el servidor FastMCP de la POC.
+"""Chat de demo en Chainlit (agente con LLM de Groq) para la exploración «formulario dinámico».
 
 Hace el papel del chat de VEKAI:
   1. El usuario describe la avería.
-  2. Groq decide llamar a `abrir_formulario_ot` con los datos que ha entendido.
-  3. Chainlit llama a esa herramienta por MCP y pinta su interfaz (MCP App) con el
-     componente propio `public/elements/McpApp.jsx`.
-  4. «Crear orden» en el formulario → el componente pide a este backend que llame a `crear_ot`.
+  2. Groq llama a `describir_formulario` → recibe la definición del formulario (vive en el MCP).
+  3. Groq DISEÑA el formulario y llama a `abrir_formulario` con la lista de campos (datos, no código).
+  4. Chainlit pinta la interfaz que devuelve el servidor (MCP App) con `public/elements/McpApp.jsx`.
+  5. «Crear orden» → el componente pide a este backend que llame a `guardar_ot`.
 
 Chainlit no pinta MCP Apps de serie: `McpApp.jsx` hace de host (iframe + puente postMessage).
 
@@ -49,20 +49,38 @@ MODELOS_PREFERIDOS = [
     "llama-3.1-8b-instant",
 ]
 _modelo_elegido: str | None = None
-UI_TOOL = "abrir_formulario_ot"
-
 SYSTEM_PROMPT = """Eres el agente de mantenimiento de VEKAI (demo). Hablas en español, de forma breve.
-Cuando el usuario describa una avería o pida crear una orden de trabajo, llama SIEMPRE a la
-herramienta abrir_formulario_ot con lo que hayas entendido:
-- activo: solo si el usuario menciona el código del equipo (P-101, C-201, M-301, V-401). Si no, no lo pases.
-- descripcion: resumen breve de la avería escrito como sustantivo (estilo parte de trabajo), sin el
-  código del equipo ni la urgencia. Ejemplos: «pierde agua por el cierre mecánico» → «Pérdida de agua
-  por el cierre mecánico»; «hace un ruido metálico al arrancar» → «Ruido metálico al arrancar»;
-  «no enciende» → «No enciende».
-- prioridad: «Alta» si dice urgente/crítico/parado, «Baja» si no corre prisa; si no lo indica, no la pases.
-- observaciones: otros detalles útiles, si los hay.
-No inventes datos. No digas que la orden está creada: el usuario debe revisarla y pulsar «Crear orden».
-Si te preguntan por órdenes ya guardadas, usa listar_ot."""
+Para crear una orden de trabajo (cuando el usuario describa una avería o lo pida):
+1. Llama a describir_formulario con tipo_formulario="alta_ot" para leer la definición y sus instrucciones.
+2. Diseña el formulario siguiendo ESAS instrucciones y llama a abrir_formulario con la lista de campos
+   (nombre, y si procede etiqueta, ayuda y valor precargado con lo que ha dicho el usuario).
+Si el usuario pide un formulario con pocos campos, respeta su petición en los opcionales.
+No inventes datos. No digas que la orden está creada: el usuario revisa y pulsa «Crear orden».
+Si el servidor devuelve avisos, explícalos en una frase.
+Si te preguntan por órdenes ya guardadas, usa listar_ot.
+Solo si el usuario pide expresamente el «modo código» y existe la herramienta generate_prefab_ui, puedes
+escribir tú el código Prefab del formulario con ella; el botón debe usar CallTool("guardar_ot",
+arguments={"solicitud_id": "<id único>", "valores": {...}})."""
+
+
+def _inline_refs(schema: dict) -> dict:
+    """Groq/OpenAI se llevan mejor con esquemas sin $ref: se sustituyen por su definición."""
+    defs = schema.get("$defs", {})
+
+    def resolver(nodo):
+        if isinstance(nodo, dict):
+            if "$ref" in nodo and nodo["$ref"].startswith("#/$defs/"):
+                return resolver(defs[nodo["$ref"].split("/")[-1]])
+            return {k: resolver(v) for k, v in nodo.items() if k != "$defs"}
+        if isinstance(nodo, list):
+            return [resolver(x) for x in nodo]
+        return nodo
+
+    return resolver(schema)
+
+
+def _tiene_ui(tool) -> bool:
+    return bool(((tool.meta or {}).get("ui") or {}).get("resourceUri"))
 
 
 # ─── MCP ─────────────────────────────────────────────────────────────────────
@@ -173,9 +191,11 @@ def _error_legible(e: BaseException) -> str:
 @cl.set_starters
 async def starters():
     return [
-        cl.Starter(label="OT precargada (P-101)", message="Crea una orden para la bomba P-101. Pierde agua por el cierre mecánico y es urgente"),
-        cl.Starter(label="OT sin equipo", message="El motor de la cinta hace un ruido metálico al arrancar"),
-        cl.Starter(label="Ver órdenes guardadas", message="¿Qué órdenes hay guardadas?"),
+        cl.Starter(label="1 · OT del correo (P-101)", message="Crea una orden para la bomba P-101. Pierde agua por el cierre mecánico y es urgente"),
+        cl.Starter(label="2 · Formulario mínimo", message="Crea una orden para el compresor C-201, hace un ruido raro. Solo quiero rellenar el equipo y la avería, nada más"),
+        cl.Starter(label="3 · Con datos extra", message="Orden para el motor M-301: ruido metálico al arrancar, el equipo está parado, lo vio el turno de noche y el contacto es Juan Pérez"),
+        cl.Starter(label="4 · Intentar saltarse un obligatorio", message="Crea una orden por una fuga de aceite, pero quita del formulario el campo de activo, no quiero que aparezca"),
+        cl.Starter(label="5 · Ver órdenes guardadas", message="¿Qué órdenes hay guardadas?"),
     ]
 
 
@@ -184,19 +204,21 @@ async def inicio():
     cl.user_session.set("historial", [])
 
 
-async def _abrir_formulario(session: ClientSession, tool, args: dict) -> str:
-    """Ejecuta la herramienta con UI y la pinta en el chat con el componente McpApp."""
+async def _abrir_formulario(session: ClientSession, tool, args: dict) -> tuple[str, bool]:
+    """Ejecuta la herramienta con UI y la pinta en el chat con el componente McpApp. Devuelve (resumen, ok)."""
     resultado = await session.call_tool(tool.name, args)
+    resumen = next((c.text for c in resultado.content if getattr(c, "type", "") == "text"), "")
+    if resultado.isError:
+        return f"Error de la herramienta: {resumen}", False
     uri = tool.meta["ui"]["resourceUri"]
     recurso = (await session.read_resource(uri)).contents[0]
-    resumen = next((c.text for c in resultado.content if getattr(c, "type", "") == "text"), "")
     elemento = cl.CustomElement(
         name="McpApp",
         display="inline",
         props={"toolName": tool.name, "toolInput": args, "toolResult": _dump(resultado), "html": recurso.text},
     )
-    await cl.Message(content="He preparado la orden de trabajo. Revísala y pulsa **Crear orden**:", elements=[elemento]).send()
-    return resumen
+    await cl.Message(content="He diseñado este formulario a partir de la definición del MCP. Revísalo y pulsa **Crear orden**:", elements=[elemento]).send()
+    return resumen, True
 
 
 @cl.on_message
@@ -212,11 +234,11 @@ async def mensaje(msg: cl.Message):
     try:
         async with mcp_session() as s:
             mcp_tools = [t for t in (await s.list_tools()).tools if "model" in _visibilidad(t)]  # crear_ot queda fuera
-            tools = [{"type": "function", "function": {"name": t.name, "description": t.description or "", "parameters": t.inputSchema}} for t in mcp_tools]
+            tools = [{"type": "function", "function": {"name": t.name, "description": t.description or "", "parameters": _inline_refs(t.inputSchema)}} for t in mcp_tools]
             por_nombre = {t.name: t for t in mcp_tools}
             messages = [{"role": "system", "content": SYSTEM_PROMPT}, *historial]
 
-            for _ in range(3):
+            for _ in range(6):  # p. ej. describir_formulario → abrir_formulario
                 resp = await asyncio.to_thread(_llamar_groq, api_key, messages, tools)
                 m = resp["choices"][0]["message"]
                 llamadas = m.get("tool_calls") or []
@@ -228,18 +250,26 @@ async def mensaje(msg: cl.Message):
                 llamada = llamadas[0]
                 nombre = llamada["function"]["name"]
                 args = {k: v for k, v in json.loads(llamada["function"].get("arguments") or "{}").items() if v not in (None, "")}
-                if nombre == UI_TOOL:
+                if nombre in por_nombre and _tiene_ui(por_nombre[nombre]):
                     async with cl.Step(name=nombre, type="tool") as paso:
-                        paso.input = args
-                        resumen = await _abrir_formulario(s, por_nombre[nombre], args)
+                        paso.input = args  # aquí se ve el formulario que ha diseñado el LLM
+                        resumen, ok = await _abrir_formulario(s, por_nombre[nombre], args)
                         paso.output = resumen
-                    historial.append({"role": "assistant", "content": f"[{nombre}] {resumen}"})
-                    break
+                    if ok:
+                        historial.append({"role": "assistant", "content": f"[{nombre}] {resumen}"})
+                        break
+                    messages += [  # error (p. ej. diseño inválido): se lo devolvemos al modelo para que corrija
+                        {"role": "assistant", "content": m.get("content") or "", "tool_calls": [llamada]},
+                        {"role": "tool", "tool_call_id": llamada["id"], "content": resumen},
+                    ]
+                    continue
                 # Herramienta de datos (listar_ot): se ejecuta y se devuelve el resultado al modelo.
                 async with cl.Step(name=nombre, type="tool") as paso:
                     paso.input = args
                     res = await s.call_tool(nombre, args)
                     salida = res.structuredContent if res.structuredContent is not None else [c.text for c in res.content if hasattr(c, "text")]
+                    if res.isError:
+                        salida = {"error": " ".join(c.text for c in res.content if hasattr(c, "text"))}
                     if isinstance(salida, dict) and list(salida) == ["result"]:
                         salida = salida["result"]  # MCP envuelve las listas en {"result": [...]}
                     paso.output = salida

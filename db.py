@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -19,7 +20,11 @@ CREATE TABLE IF NOT EXISTS ordenes (
     prioridad     TEXT NOT NULL CHECK (prioridad IN ('Baja','Normal','Alta')),
     observaciones TEXT NOT NULL DEFAULT '',
     estado        TEXT NOT NULL,
-    creada_en     TEXT NOT NULL
+    creada_en     TEXT NOT NULL,
+    -- Nuevo en la versión dinámica:
+    tipo_formulario     TEXT NOT NULL DEFAULT 'alta_ot',
+    datos_extra         TEXT NOT NULL DEFAULT '{}',   -- campos que no tienen columna propia (JSON)
+    formulario_mostrado TEXT NOT NULL DEFAULT '{}'    -- diseño que generó el LLM, tras la capa de seguridad (auditoría)
 );
 """
 
@@ -33,7 +38,16 @@ def _conectar() -> sqlite3.Connection:
 
 
 def crear_orden_idempotente(
-    *, solicitud_id: str, activo: str, descripcion: str, prioridad: str, observaciones: str, estado: str
+    *,
+    solicitud_id: str,
+    activo: str,
+    descripcion: str,
+    prioridad: str,
+    observaciones: str,
+    estado: str,
+    tipo_formulario: str = "alta_ot",
+    datos_extra: dict | None = None,
+    formulario_mostrado: dict | None = None,
 ) -> tuple[dict, bool]:
     """Inserta la OT si no existe ya una para `solicitud_id`.
 
@@ -58,10 +72,15 @@ def crear_orden_idempotente(
             "observaciones": observaciones,
             "estado": estado,
             "creada_en": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "tipo_formulario": tipo_formulario,
+            "datos_extra": json.dumps(datos_extra or {}, ensure_ascii=False),
+            "formulario_mostrado": json.dumps(formulario_mostrado or {}, ensure_ascii=False),
         }
         con.execute(
-            "INSERT INTO ordenes (id, num, solicitud_id, activo, descripcion, prioridad, observaciones, estado, creada_en)"
-            " VALUES (:id, :num, :solicitud_id, :activo, :descripcion, :prioridad, :observaciones, :estado, :creada_en)",
+            "INSERT INTO ordenes (id, num, solicitud_id, activo, descripcion, prioridad, observaciones, estado, creada_en,"
+            " tipo_formulario, datos_extra, formulario_mostrado)"
+            " VALUES (:id, :num, :solicitud_id, :activo, :descripcion, :prioridad, :observaciones, :estado, :creada_en,"
+            " :tipo_formulario, :datos_extra, :formulario_mostrado)",
             orden,
         )
         con.execute("COMMIT")

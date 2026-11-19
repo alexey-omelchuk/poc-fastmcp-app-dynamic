@@ -1,63 +1,52 @@
-# Plan – POC FastMCP Apps: órdenes de trabajo (agente de mantenimiento VEKAI)
+# Plan – Exploración: formulario de OT generado dinámicamente por el LLM
 
-## Objetivo
-Que un usuario describa una avería en el chat, el agente abra un formulario **Nueva orden de
-trabajo** precargado con lo que ha entendido, el usuario lo revise/corrija y pulse **Crear orden**
-para registrarla en una base de datos SQLite local con datos de demo.
+## De dónde sale (reunión)
+- El formulario de la v1 era **fijo** (programado en `server.py`). Se pide que lo **genere el propio LLM**
+  a partir de una **descripción del formulario que vive en el MCP** ("mini prompt que explica cómo se
+  construye un formulario de alta de orden").
+- Se guarda **igual que ahora** (misma tabla SQLite), con **otra herramienta para guardar**.
+- Objetivo: **explorar**. Ver qué se puede hacer, qué riesgos hay ("si dejas ejecutar código dinámico…")
+  y cómo protegerlo.
+- Debate de la reunión que hay que poder enseñar:
+  - "Quiero definir formularios **sin escribir código**: este campo, este, este".
+  - "Si el técnico dice *solo quiero rellenar este campo*, el formulario se adapta".
+  - "Pero lo obligatorio es obligatorio; por prompt alguien se lo puede saltar" → **la seguridad no puede
+    depender del prompt**.
 
-## Requisitos (del correo) → cómo se cumplen
+## Enfoque elegido: dos experimentos
 
-| # | Requisito | Implementación |
+### Experimento A (principal) – Formulario declarativo generado por el LLM
+1. La **definición del formulario** está en un fichero de datos: `formularios/alta_ot.json` (campos, tipos,
+   obligatorios, opciones e **instrucciones** para el LLM). Para añadir o quitar campos se edita el JSON, sin tocar código.
+2. Herramienta **`describir_formulario(tipo)`** (la ve el modelo): devuelve esa definición y las instrucciones.
+3. El LLM **diseña el formulario**: qué campos mostrar, en qué orden, con qué etiquetas y ayudas, y qué valores
+   precargar. Lo envía como **datos (JSON)**, no como código, a **`abrir_formulario`** (`@app.ui()`).
+4. El servidor aplica una **capa de seguridad** antes de pintar:
+   - solo se aceptan campos que existen en la definición; el resto se descarta con aviso;
+   - el tipo de cada campo lo marca la definición, no el LLM;
+   - los obligatorios **se añaden siempre**, aunque el LLM los quite (o se lo pidan por prompt);
+   - los valores precargados se validan (p. ej. opciones de un selector) y los textos se limitan.
+5. Un **renderizador genérico** convierte la definición resultante en componentes Prefab.
+6. **`guardar_ot`** (`@app.tool()`, solo la UI) valida **contra la definición original**, no contra lo que
+   generó el LLM, y guarda en la **misma tabla** `ordenes`. Los campos nuevos van a `datos_extra` (JSON) y se guarda
+   también el formulario que se mostró (auditoría). Es idempotente por `solicitud_id`, como en la v1.
+
+### Experimento B (opcional) – El LLM escribe el código del formulario (FastMCP *Generative UI*)
+- Es el proveedor oficial `GenerativeUI`: el LLM escribe **código Python de Prefab**, que se ejecuta en un
+  **sandbox Pyodide** (Deno en el servidor y Pyodide en el navegador).
+- Se activa con `GENERATIVE_UI=1`. Sirve para comparar: máxima libertad, pero **ejecuta código generado**.
+- Esta POC no lo ha podido probar: el entorno de desarrollo bloquea `deno.land` y las CDN. Está documentado.
+
+## Requisitos verificables
+| # | Qué | Cómo se comprueba |
 |---|---|---|
-| 1 | `FastMCPApp` con `abrir_formulario_ot` (`@app.ui()`) que recibe los datos extraídos por el agente | `server.py` → `abrir_formulario_ot(activo, descripcion, prioridad, observaciones)` devuelve un `PrefabApp` |
-| 2 | `crear_ot` con `@app.tool()` enlazada al envío con `CallTool` | `Form(on_submit=CallTool(crear_ot, arguments=…))` |
-| 3 | Precarga: P-101 / «Pérdida de agua por el cierre mecánico» / Alta | El agente pasa esos argumentos; el formulario los muestra en sus campos (editables) |
-| 4 | Equipo no identificado → campo pendiente + selector de activos de prueba | Si `activo` falta o no existe en el catálogo: selector vacío + aviso «Activo pendiente» |
-| 5 | Validación en servidor: activo existe, descripción con contenido, prioridad válida | `crear_ot` → `ToolError` con la lista de campos a corregir |
-| 6 | Genera ID y estado **Abierta** | `OT-DEMO-0001`, `OT-DEMO-0002`… y `estado='Abierta'` |
-| 7 | Mensaje «Orden OT-DEMO-0001 creada · Estado: Abierta» en el formulario | `SetState("resultado", RESULT)` + `Alert` |
-| 8 | Error → el usuario ve qué corregir y conserva lo escrito | `on_error` → `Alert` destructivo; los campos son estado del formulario y no se borran |
-| 9 | Identificador por formulario: doble clic/reintento = misma OT | `solicitud_id` (UUID) generado al abrir; `UNIQUE` en SQLite; un reintento devuelve la OT existente |
-| 10 | Al abrir el formulario: cero altas para esa solicitud | `abrir_formulario_ot` no escribe nada; el formulario muestra «Altas para esta solicitud: 0» y `scripts/ver_db.py` lo comprueba |
-| 11 | Campos: Activo (obligatorio, 3-4 equipos), Descripción (obligatoria), Prioridad (Baja/Normal/Alta, Normal por defecto), Observaciones (opcional) | Ver `catalogo.py` y el formulario |
-| 12 | Arrancar con `fastmcp dev apps server.py:mcp` | Documentado y probado |
-| 13 | Comprobar si el chat de VEKAI puede mostrar el formulario y ejecutar el guardado | Sin acceso a VEKAI desde esta POC → documentado como punto pendiente con checklist en `docs/VEKAI.md` |
-| 14 | Entregables: código, README corto, demo 2-3 min | `README.md`, `docs/demo.mp4` (grabación del chat) y guion en `docs/PRESENTACION.md` |
-| 15 | Chat de prueba en **Chainlit** con LLM de **Groq** (petición del equipo) | `chat/`: Chainlit + Groq; `McpApp.jsx` hace de host de MCP Apps porque Chainlit no lo trae de serie |
-
-## Arquitectura
-```
-Usuario ──► Agente (LLM del chat)
-              │  extrae activo / descripción / prioridad
-              ▼
-        abrir_formulario_ot  (@app.ui, visible para el modelo)
-              │  devuelve UI Prefab (formulario) + solicitud_id nuevo
-              ▼
-        Formulario en el chat (iframe sandbox, renderer Prefab)
-              │  «Crear orden» → CallTool
-              ▼
-        crear_ot  (@app.tool, solo visible para la UI)
-              │  valida + INSERT idempotente por solicitud_id
-              ▼
-        SQLite  data/ordenes.db  (tabla ordenes)
-```
-
-Despliegue: dos servicios separados (Chainlit necesita `mcp<2` y FastMCP 4.2 usa `mcp 2.x`):
-`mcp` (servidor FastMCP, :8000) y `chat` (Chainlit, :8001), que hablan por MCP sobre HTTP, igual que lo haría VEKAI.
-
-Archivos:
-- `server.py` – `FastMCPApp`, herramientas y formulario.
-- `catalogo.py` – catálogo ficticio de equipos.
-- `db.py` – SQLite: esquema, alta idempotente, consultas.
-- `scripts/ver_db.py` – ver filas guardadas / altas por solicitud.
-- `tests/test_ot.py` – pruebas del flujo (precarga, pendiente, validación, idempotencia, cero altas).
-- `chat/app.py` – agente en Chainlit (Groq + cliente MCP); `chat/public/elements/McpApp.jsx` – host MCP Apps dentro de Chainlit.
+| 1 | La frase del correo genera un formulario con P-101 / descripción / Alta | e2e chat + test |
+| 2 | "Solo quiero indicar el equipo y la avería" → formulario mínimo | e2e chat |
+| 3 | Pedir quitar un obligatorio → el servidor lo vuelve a poner y avisa | test + e2e |
+| 4 | Campos desconocidos o valores inválidos del LLM → descartados con aviso | test |
+| 5 | Añadir un campo nuevo editando el JSON → aparece y se guarda (datos_extra) | test |
+| 6 | `guardar_ot` valida contra la definición, misma tabla, idempotente | test |
+| 7 | Abrir no guarda (0 altas) | test |
 
 ## Fuera de alcance
-Autenticación, sistema real de mantenimiento (GMAO/ERP), usuarios/roles.
-
-## Criterios de aceptación
-- Las pruebas de `tests/` pasan.
-- En `fastmcp dev apps` se ve el formulario precargado, el caso de activo pendiente, el error de
-  validación conservando datos y el mensaje de OT creada.
-- Doble envío → una sola fila en SQLite.
+Autenticación, sistema real, editor visual de formularios, endurecimiento del experimento B.
