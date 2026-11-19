@@ -21,10 +21,10 @@
   tienen la misma forma (misma tabla; los campos nuevos van en `datos_extra`).
 - **«Quiero definir formularios sin escribir código»** → `formularios/alta_ot.json`. Añadir un campo es añadir
   un objeto al JSON (hay una prueba automática que lo comprueba).
-- **«Si el técnico dice *solo quiero rellenar este campo*…»** → el LLM quita opcionales (botón 2), pero no los
+- **«Si el técnico dice *solo quiero rellenar este campo*…»** → el LLM quita opcionales (botón 2) o los añade según lo que cuenta el usuario (botones 3 y 4), pero no los
   obligatorios.
 - **«Pero por prompt se lo puede saltar»** → la seguridad **no depende del prompt**. Si el LLM (o un usuario
-  con prompt injection) quita un obligatorio, el servidor lo vuelve a poner y avisa (botón 4). Y si alguien
+  con prompt injection) quita un obligatorio, el servidor lo vuelve a poner y avisa (botón 5). Y si alguien
   llamara directamente a `guardar_ot` sin él, se rechaza.
 - **«Si dejas ejecutar código dinámico…»** → en el enfoque A **no se ejecuta código del LLM**: solo se aceptan
   datos de una lista cerrada (6 tipos de campo). El enfoque B sí ejecuta código y queda como experimento.

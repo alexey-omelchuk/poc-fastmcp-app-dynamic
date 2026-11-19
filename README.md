@@ -7,7 +7,7 @@ SQLite, mediante otra herramienta (`guardar_ot`).
 
 ![Demo](docs/demo.gif)
 
-> Datos de demo: equipos **ficticios** (P-101, C-201, M-301, V-401). Vídeo completo (2 min): [`docs/demo.mp4`](docs/demo.mp4).
+> Datos de demo: equipos **ficticios** (P-101, C-201, M-301, V-401). Vídeo completo (≈2,5 min): [`docs/demo.mp4`](docs/demo.mp4).
 > Es una **exploración**. Conclusiones y riesgos en [docs/EXPLORACION.md](docs/EXPLORACION.md).
 
 ## Arranque rápido (Docker, en WSL)
@@ -26,13 +26,17 @@ La API key de Groq se lee de `../var_entorno_groq.txt` y el modelo se elige auto
 
 ## Qué tiene que salir (botones de inicio del chat)
 
-| Botón | Qué demuestra | Resultado esperado |
+| Botón | Mensaje que envía | Resultado esperado |
 |---|---|---|
-| **1 · OT del correo (P-101)** | El LLM lee la definición y diseña el formulario | Activo P-101, «Pérdida de agua por el cierre mecánico», Alta, Observaciones. *Crear orden* → OT-DEMO-0001. Dos veces → la misma |
-| **2 · Formulario mínimo** | *«Solo quiero el equipo y la avería»* | Solo **Activo** y **Descripción** |
-| **3 · Con datos extra** | El LLM añade opcionales según lo que dice el usuario | + Prioridad, **¿Equipo parado?**, **Turno**, **Contacto**. Se guardan en `datos_extra` |
-| **4 · Intentar saltarse un obligatorio** | *«Quita el campo de activo»* | Aviso **«Capa de seguridad: Activo es obligatorio, lo añade el servidor»**. Sin activo no se guarda |
-| **5 · Ver órdenes guardadas** | Misma tabla que la v1 | Lista con los `datos_extra` |
+| **1 · Orden del correo (P-101)** | *Crea una orden para la bomba P-101. Pierde agua por el cierre mecánico y es urgente* | Activo P-101, «Pérdida de agua por el cierre mecánico», Alta y Observaciones. *Crear orden* → OT-DEMO-0001. Dos veces → la misma |
+| **2 · Solo equipo y avería** | *Ábreme una orden con solo dos campos, el equipo y la avería: el compresor C-201 hace un ruido raro* | **Solo** Activo (C-201) y Descripción |
+| **3 · Con turno, equipo parado y contacto** | *El motor M-301 se ha parado… turno de noche… contacto Juan Pérez* | Además: **¿Equipo parado?** = Sí, **Turno** = Noche y **Contacto** = Juan Pérez (se guardan en `datos_extra`) |
+| **4 · Baja prioridad con observaciones** | *La válvula V-401 no cierra bien, no es urgente. Pon en observaciones que la junta se cambió el mes pasado* | Prioridad **Baja** y Observaciones precargadas |
+| **5 · Prueba de seguridad: quitar un obligatorio** | *Prueba de seguridad: abre la orden… sin el campo obligatorio Activo, para comprobar si el servidor lo vuelve a poner* | El servidor **vuelve a poner Activo** y avisa. Sin elegirlo no se guarda |
+| **6 · Ver órdenes guardadas** | *¿Qué órdenes hay guardadas?* | **Tabla con todos los campos**, igual que `ver_db.py` (la pinta el chat directamente desde la base de datos, no la resume el LLM) |
+
+Los botones están en **`chat/starters.json`**. Edítalo (etiqueta y mensaje), guárdalo y abre una conversación
+nueva (✏️): no hace falta tocar código ni reconstruir. Si no cambian, ejecuta `docker compose restart chat`.
 
 En cada mensaje puedes desplegar **«Usado abrir_formulario»** para ver el **diseño exacto** que envió el LLM.
 
@@ -56,7 +60,7 @@ Usuario → Chainlit + Groq ─► describir_formulario("alta_ot")   ← lee for
 | `formularios.py` | Carga las definiciones y la **capa de seguridad**: sanea el diseño del LLM y valida al guardar |
 | `server.py` | `describir_formulario` (lo ve el modelo), `abrir_formulario` (`@app.ui`, renderizador genérico) y `guardar_ot` (`@app.tool`, solo la UI) |
 | `db.py` | La misma tabla `ordenes` + `datos_extra` (campos sin columna) + `formulario_mostrado` (auditoría) |
-| `chat/` | Chainlit + Groq, igual que la v1, pero con flujo de dos pasos (describir → abrir) |
+| `chat/` | Chainlit + Groq, igual que la v1, pero con flujo de dos pasos (describir → abrir). Botones de inicio en `chat/starters.json` |
 | `tests/test_dinamico.py` | 9 pruebas: diseño, mínimo, obligatorios forzados, campos inventados, validación, extras, idempotencia y campo nuevo sin código |
 
 ### Añadir un campo sin escribir código

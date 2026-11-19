@@ -17,10 +17,11 @@ Deja abiertos http://localhost:8011, una terminal y `formularios/alta_ot.json` e
 2. **Enseña la definición (30 s).** Abre `formularios/alta_ot.json`: campos, obligatorios, opciones e instrucciones.
    «Esto es lo único que define el formulario. No es código.»
 3. **Demo (3-4 min)** con los botones del chat:
-   - **1 · OT del correo** → despliega «Usado abrir_formulario» para enseñar el JSON que diseñó el LLM. Crear orden dos veces → una sola OT.
-   - **2 · Formulario mínimo** → solo equipo y avería.
-   - **3 · Con datos extra** → aparecen turno, equipo parado y contacto. Se guardan en `datos_extra`.
-   - **4 · Saltarse un obligatorio** → aviso amarillo de la capa de seguridad. Sin activo no se guarda.
+   - **1 · Orden del correo** → despliega «Usado abrir_formulario» para enseñar el JSON que diseñó el LLM. Crear orden dos veces → una sola OT.
+   - **2 · Solo equipo y avería** → el formulario trae solo esos dos campos.
+   - **3 · Con turno, equipo parado y contacto** → aparecen esos campos extra. Se guardan en `datos_extra`.
+   - **4 · Baja prioridad con observaciones** → Baja y la observación ya escrita.
+   - **5 · Prueba de seguridad** → aviso amarillo: el servidor vuelve a poner el Activo. Sin él no se guarda.
    - Terminal: `docker compose exec mcp python scripts/ver_db.py`. Misma tabla y extras en JSON.
 4. **(Opcional, 1 min) Campo nuevo sin código.** Añade `horas_estimadas` al JSON, `docker compose restart mcp` y
    pide otra orden mencionando las horas.
@@ -29,12 +30,12 @@ Deja abiertos http://localhost:8011, una terminal y `formularios/alta_ot.json` e
    experimento, pero obliga a resolver el sandbox.»
 
 ## Plan B
-El vídeo `docs/demo.mp4` (2 min) enseña los 5 casos.
+El vídeo `docs/demo.mp4` (≈2,5 min) enseña los 6 casos.
 
 ## Preguntas probables
 | Pregunta | Respuesta |
 |---|---|
-| ¿Se puede saltar un obligatorio por prompt? | No. El servidor lo añade al pintar y lo exige al guardar (caso 4) |
+| ¿Se puede saltar un obligatorio por prompt? | No. El servidor lo añade al pintar y lo exige al guardar (caso 5) |
 | ¿El LLM ejecuta código? | En este enfoque, no: solo envía datos de una lista cerrada de 6 tipos de campo |
 | ¿Cada usuario ve el mismo formulario? | La misma definición y las mismas validaciones. La presentación puede variar; se puede fijar si se quiere |
 | ¿Dónde se guardan los campos nuevos? | En la misma tabla, columna `datos_extra` (JSON) |

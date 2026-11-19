@@ -57,7 +57,7 @@ Para crear una orden de trabajo (cuando el usuario describa una avería o lo pid
 Si el usuario pide un formulario con pocos campos, respeta su petición en los opcionales.
 No inventes datos. No digas que la orden está creada: el usuario revisa y pulsa «Crear orden».
 Si el servidor devuelve avisos, explícalos en una frase.
-Si te preguntan por órdenes ya guardadas, usa listar_ot.
+Si te preguntan por órdenes ya guardadas, usa listar_ot (el chat mostrará la tabla completa).
 Solo si el usuario pide expresamente el «modo código» y existe la herramienta generate_prefab_ui, puedes
 escribir tú el código Prefab del formulario con ella; el botón debe usar CallTool("guardar_ot",
 arguments={"solicitud_id": "<id único>", "valores": {...}})."""
@@ -77,6 +77,32 @@ def _inline_refs(schema: dict) -> dict:
         return nodo
 
     return resolver(schema)
+
+
+COLUMNAS_OT = ["id", "activo", "prioridad", "estado", "descripcion", "observaciones", "datos_extra", "solicitud_id", "creada_en"]
+TITULOS_OT = ["ID", "Activo", "Prioridad", "Estado", "Descripción", "Observaciones", "Datos extra", "Solicitud", "Creada (UTC)"]
+
+
+def _tabla_ordenes(filas: list[dict]) -> str:
+    """Tabla Markdown con TODOS los campos de las órdenes (los mismos que scripts/ver_db.py)."""
+    if not filas:
+        return "No hay órdenes guardadas."
+
+    def celda(col, v):
+        if col == "datos_extra":
+            try:
+                extra = json.loads(v) if isinstance(v, str) else (v or {})
+            except ValueError:
+                extra = {}
+            v = " · ".join(f"{k}: {x}" for k, x in extra.items()) if extra else "—"
+        if col == "creada_en" and isinstance(v, str):
+            v = v.replace("T", " ")[:16]  # 2026-11-19 15:20
+        texto = str(v if v not in (None, "") else "—")
+        return texto.replace("|", "\\|").replace("\n", " ")
+
+    cab = "| " + " | ".join(TITULOS_OT) + " |\n|" + "---|" * len(COLUMNAS_OT) + "\n"
+    cuerpo = "\n".join("| " + " | ".join(celda(c, f.get(c)) for c in COLUMNAS_OT) + " |" for f in filas)
+    return f"**Órdenes guardadas: {len(filas)}**\n\n{cab}{cuerpo}"
 
 
 def _tiene_ui(tool) -> bool:
@@ -188,15 +214,18 @@ def _error_legible(e: BaseException) -> str:
 
 
 # ─── Chainlit ────────────────────────────────────────────────────────────────
+STARTERS_FILE = Path(os.environ.get("STARTERS_FILE", Path(__file__).parent / "starters.json"))
+
+
 @cl.set_starters
 async def starters():
-    return [
-        cl.Starter(label="1 · OT del correo (P-101)", message="Crea una orden para la bomba P-101. Pierde agua por el cierre mecánico y es urgente"),
-        cl.Starter(label="2 · Formulario mínimo", message="Crea una orden para el compresor C-201, hace un ruido raro. Solo quiero rellenar el equipo y la avería, nada más"),
-        cl.Starter(label="3 · Con datos extra", message="Orden para el motor M-301: ruido metálico al arrancar, el equipo está parado, lo vio el turno de noche y el contacto es Juan Pérez"),
-        cl.Starter(label="4 · Intentar saltarse un obligatorio", message="Crea una orden por una fuga de aceite, pero quita del formulario el campo de activo, no quiero que aparezca"),
-        cl.Starter(label="5 · Ver órdenes guardadas", message="¿Qué órdenes hay guardadas?"),
-    ]
+    """Botones de inicio: se leen de starters.json (edítalo y reinicia el chat; no hace falta tocar código)."""
+    try:
+        datos = json.loads(STARTERS_FILE.read_text(encoding="utf-8"))
+        return [cl.Starter(label=d["label"], message=d["message"]) for d in datos]
+    except Exception as e:  # fichero mal escrito → seguimos sin botones
+        print(f"[chat] No se pudo leer {STARTERS_FILE}: {e}", flush=True)
+        return []
 
 
 @cl.on_chat_start
@@ -273,6 +302,12 @@ async def mensaje(msg: cl.Message):
                     if isinstance(salida, dict) and list(salida) == ["result"]:
                         salida = salida["result"]  # MCP envuelve las listas en {"result": [...]}
                     paso.output = salida
+                if nombre == "listar_ot" and isinstance(salida, list):
+                    # La tabla se pinta directamente desde los datos (no la resume el LLM), con todos los campos.
+                    tabla = _tabla_ordenes(salida)
+                    await cl.Message(content=tabla).send()
+                    historial.append({"role": "assistant", "content": f"[listar_ot] Mostradas {len(salida)} órdenes en una tabla."})
+                    break
                 messages += [
                     {"role": "assistant", "content": m.get("content") or "", "tool_calls": [llamada]},
                     {"role": "tool", "tool_call_id": llamada["id"], "content": json.dumps(salida, ensure_ascii=False, default=str)},

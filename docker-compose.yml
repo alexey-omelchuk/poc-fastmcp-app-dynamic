@@ -32,6 +32,8 @@ services:
       - "8011:8001"
     environment:
       MCP_URL: http://mcp:8000/mcp
+    volumes:
+      - ./chat/starters.json:/app/starters.json:ro   # botones de inicio: edítalos y abre una conversación nueva
     env_file:
       - path: ../var_entorno_groq.txt         # GROQ_API_KEY=... (fuera del repo)
         required: false

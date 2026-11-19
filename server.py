@@ -230,10 +230,10 @@ def guardar_ot(solicitud_id: str, valores: dict, tipo_formulario: str = "alta_ot
 
 
 @app.tool(model=True)
-def listar_ot(limite: int = 10) -> list[dict]:
-    """Lista las últimas órdenes de trabajo guardadas (incluye datos_extra)."""
-    filas = db.listar_ordenes(limite)
-    return [{k: v for k, v in f.items() if k != "formulario_mostrado"} for f in filas]
+def listar_ot(limite: int = 50) -> list[dict]:
+    """Lista las órdenes de trabajo guardadas (todos los campos, incluido datos_extra), de la más antigua a la más reciente."""
+    filas = sorted(db.listar_ordenes(limite), key=lambda f: f["num"])
+    return [{k: v for k, v in f.items() if k not in ("formulario_mostrado", "num")} for f in filas]
 
 
 mcp = FastMCP("VEKAI Mantenimiento – POC formularios dinámicos", providers=[app])
